@@ -1,8 +1,10 @@
 import { gql } from 'apollo-server-express';
 import jwt from 'jsonwebtoken';
+import mongoose from 'mongoose';
 import { v4 } from 'uuid';
 import sendEmail from '../utils/sendEmail';
 import upload from '../utils/upload';
+import Profile from '../models/profileModel';
 
 const typeDefs = gql`
   directive @authenticated on OBJECT | FIELD_DEFINITION
@@ -19,7 +21,7 @@ const typeDefs = gql`
   }
   type Query {
     me: User
-    users: [User] @authenticated
+    users: [User]
   }
   type Mutation {
     createUser(info: CreateUserInput): User
@@ -57,23 +59,31 @@ const resolvers = {
     posts: (user, _, { model: { Post } }) => Post.find({ author: user.id }),
   },
   Query: {
-    users: (_, __, { model: { User } }) => User.find(),
-    me: async (_, __, { model: { User }, currentUser }) => {
-      const user = await User.findOne({ _id: currentUser });
-      return user;
+    users: async (_, __, { model: { Profile } }) => {
+      return Profile.find().populate('userId');
     },
+    me: async (_, __, { model: { User }, currentUser }) => User.findOne({ _id: currentUser }),
   },
   Mutation: {
-    createUser: async (_, { info }, { model: { User } }) => {
+    createUser: async (_, { info }, { model: { User, Profile } }) => {
       const isUserExists = await User.findOne({ email: info.email });
       if (isUserExists) {
         throw new Error('Email already exists');
       }
+      const session = await mongoose.startSession();
+      session.startTransaction();
       try {
-        const newUser = await User.create(info);
-        return newUser;
+        const newUser = await User.create([{ ...info }], { session });
+        // eslint-disable-next-line no-param-reassign
+        info.userId = newUser[0].id;
+        await Profile.create([{ ...info }], { session });
+        await session.commitTransaction();
+        return { ...info };
       } catch (err) {
+        await session.abortTransaction();
         throw new Error(err);
+      } finally {
+        session.endSession();
       }
     },
     updateUser: async (_, { info }, { model: { User }, currentUser }) => {

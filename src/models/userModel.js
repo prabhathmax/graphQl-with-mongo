@@ -2,32 +2,30 @@
 import mongoose, { Schema } from 'mongoose';
 import bcrypt from 'bcrypt';
 
-const UserSchema = new Schema({
-  firstName: {
-    type: String,
-    required: true,
-  },
-  lastName: String,
-  email: {
-    type: String,
-    unique: true,
-    required: true,
-  },
-  password: {
-    type: String,
-    required: true,
-    minlength: 7,
-    maxlength: 42,
-  },
-  resetPasswordToken: String,
-  profileImage: String,
-  posts: [
-    {
-      type: Schema.Types.ObjectId,
-      ref: 'Post',
+const UserSchema = new Schema(
+  {
+    email: {
+      type: String,
+      unique: true,
+      required: true,
     },
-  ],
-});
+    password: {
+      type: String,
+      required: true,
+      minlength: 7,
+      maxlength: 42,
+    },
+    resetPasswordToken: String,
+    profileImage: String,
+    posts: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: 'Post',
+      },
+    ],
+  },
+  { autoCreate: true },
+);
 
 UserSchema.path('email').validate(async (email) => {
   const users = await mongoose.models.User.countDocuments({ email });
